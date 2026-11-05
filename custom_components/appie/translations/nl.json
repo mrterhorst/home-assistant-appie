@@ -28,27 +28,77 @@
   },
   "services": {
     "add_item": {
-      "name": "Voeg item toe",
-      "description": "Voegt een item toe aan je Albert Heijn boodschappenlijst via naam (vrije tekst) of een exact product-ID."
+      "name": "Item toevoegen",
+      "description": "Voegt een item toe aan de Albert Heijn boodschappenlijst, als vrije tekst of gekoppeld aan een AH-product.",
+      "fields": {
+        "name": {
+          "name": "Naam",
+          "description": "Wat je wilt toevoegen, bijv. \"pindakaas\". Laat leeg als je een product-ID gebruikt."
+        },
+        "product_id": {
+          "name": "Product-ID",
+          "description": "Exact AH-webshopId (uit een productlink of search_products). Heeft voorrang op de naam."
+        },
+        "quantity": {
+          "name": "Aantal",
+          "description": "Hoeveel stuks."
+        },
+        "link_product": {
+          "name": "Koppelen aan product",
+          "description": "Zoek de naam op in het AH-assortiment en koppel een zekere match; anders vrije tekst."
+        }
+      }
+    },
+    "search_products": {
+      "name": "Producten zoeken",
+      "description": "Zoekt in het AH-assortiment en geeft producten terug met product-ID, prijs en bonus.",
+      "fields": {
+        "query": {
+          "name": "Zoekterm",
+          "description": "Waar je naar zoekt."
+        },
+        "limit": {
+          "name": "Max. resultaten",
+          "description": "Aantal resultaten (1-25)."
+        }
+      }
     },
     "checkout": {
-      "name": "Naar winkelwagen",
-      "description": "Zet niet-afgevinkte, product-gekoppelde items om naar een bestelling in de AH-app (vrije-tekst-items worden overgeslagen)."
+      "name": "Naar winkelmand",
+      "description": "Zet niet-afgevinkte, aan een product gekoppelde items in je actieve AH-bestelling. Wat al in de mand zit blijft staan en wordt opgehoogd. Vrije-tekst-items worden overgeslagen."
     },
     "clear_list": {
-      "name": "Leeg boodschappenlijst",
-      "description": "Verwijdert alle items van je Albert Heijn boodschappenlijst."
+      "name": "Boodschappenlijst leegmaken",
+      "description": "Verwijdert alle items van de Albert Heijn boodschappenlijst."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Verversen",
-        "description": "De lijst wordt altijd opgehaald zodra je hem in Home Assistant opent, elke minuut zolang hij open staat, en direct na wijzigingen vanuit Home Assistant. Deze instelling bepaalt het extra verversen op de achtergrond, zodat automations en spraakassistenten een verse lijst zien. 0 = uit.",
+        "title": "Instellingen",
+        "description": "De lijst wordt altijd opgehaald zodra je hem in Home Assistant opent, elke minuut zolang hij open staat, en direct na wijzigingen vanuit Home Assistant. Het verversen op de achtergrond is wat automations en spraakassistenten zien als niemand de lijst open heeft (0 = uit).",
         "data": {
-          "scan_interval": "Achtergrond verversen (minuten, 0 = uit)"
+          "scan_interval": "Achtergrond verversen (minuten, 0 = uit)",
+          "link_products": "Getypte items koppelen aan AH-producten (zoeken; anders vrije tekst)"
         }
       }
+    }
+  },
+  "exceptions": {
+    "auth_expired": {
+      "message": "Je Albert Heijn-login is verlopen. Log opnieuw in via de melding onder Instellingen."
+    },
+    "api_error": {
+      "message": "Albert Heijn reageerde niet zoals verwacht: {error}"
+    },
+    "item_not_found": {
+      "message": "Dat item staat niet meer op de AH-lijst. Ververs en probeer opnieuw."
+    },
+    "empty_item": {
+      "message": "Typ iets om toe te voegen."
+    },
+    "name_or_product_required": {
+      "message": "Geef een naam of een product-ID op."
     }
   }
 }

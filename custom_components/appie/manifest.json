@@ -1,12 +1,14 @@
 {
   "domain": "appie",
   "name": "Albert Heijn boodschappenlijst",
-  "codeowners": [],
+  "codeowners": [
+    "@mrterhorst"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/mrterhorst/home-assistant-appie",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": [],
-  "version": "0.3.0",
+  "version": "0.4.0",
   "issue_tracker": "https://github.com/mrterhorst/home-assistant-appie/issues"
 }

@@ -29,26 +29,76 @@
   "services": {
     "add_item": {
       "name": "Add item",
-      "description": "Adds an item to your Albert Heijn shopping list by name (free text) or an exact product ID."
+      "description": "Adds an item to the Albert Heijn shopping list, as free text or linked to an AH product.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "What to add, e.g. \"pindakaas\". Leave empty when using a product ID."
+        },
+        "product_id": {
+          "name": "Product ID",
+          "description": "Exact AH webshopId (from a product URL or search_products). Takes precedence over name."
+        },
+        "quantity": {
+          "name": "Quantity",
+          "description": "How many."
+        },
+        "link_product": {
+          "name": "Link to product",
+          "description": "Search the AH assortment for the name and link a confident match; otherwise free text."
+        }
+      }
+    },
+    "search_products": {
+      "name": "Search products",
+      "description": "Searches the AH assortment and returns products with their product ID, price and bonus.",
+      "fields": {
+        "query": {
+          "name": "Search term",
+          "description": "What to search for."
+        },
+        "limit": {
+          "name": "Max. results",
+          "description": "Number of results (1-25)."
+        }
+      }
     },
     "checkout": {
-      "name": "Send to cart",
-      "description": "Moves unchecked, product-linked items into an order in the AH app (free-text items are skipped)."
+      "name": "Send to basket",
+      "description": "Adds unchecked, product-linked items to your active AH order. Quantities already in the basket are kept and added to. Free-text items are skipped."
     },
     "clear_list": {
       "name": "Clear shopping list",
-      "description": "Removes all items from your Albert Heijn shopping list."
+      "description": "Removes all items from the Albert Heijn shopping list."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Refresh settings",
-        "description": "The list is always fetched when you open it in Home Assistant, every minute while it stays open, and right after changes made from Home Assistant. This setting controls the extra background refresh, so automations and voice assistants see a fresh list. 0 = off.",
+        "title": "Settings",
+        "description": "The list is always fetched when you open it in Home Assistant, every minute while it stays open, and right after changes made from Home Assistant. The background refresh is what automations and voice assistants see when nobody has the list open (0 = off).",
         "data": {
-          "scan_interval": "Background refresh (minutes, 0 = off)"
+          "scan_interval": "Background refresh (minutes, 0 = off)",
+          "link_products": "Link typed items to AH products (search; falls back to free text)"
         }
       }
+    }
+  },
+  "exceptions": {
+    "auth_expired": {
+      "message": "Your Albert Heijn login has expired. Log in again via the notification under Settings."
+    },
+    "api_error": {
+      "message": "Albert Heijn did not respond as expected: {error}"
+    },
+    "item_not_found": {
+      "message": "That item is no longer on the Albert Heijn list. Refresh and try again."
+    },
+    "empty_item": {
+      "message": "Type something to add."
+    },
+    "name_or_product_required": {
+      "message": "Give a name or a product ID."
     }
   }
 }

@@ -17,8 +17,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import AppieApiError, AppieAuthError, AppieClient
-from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+from .api import AppieApiError, AppieAuthError, AppieClient, ListItem
+from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def background_interval(entry: ConfigEntry) -> timedelta | None:
     return timedelta(minutes=minutes) if minutes > 0 else None
 
 
-class AppieCoordinator(DataUpdateCoordinator[list[dict]]):
+class AppieCoordinator(DataUpdateCoordinator[list[ListItem]]):
     """Holds the AH shopping list and refreshes it on demand."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: AppieClient) -> None:
@@ -57,12 +57,18 @@ class AppieCoordinator(DataUpdateCoordinator[list[dict]]):
             return
         await self.async_request_refresh()
 
-    async def _async_update_data(self) -> list[dict]:
+    async def _async_update_data(self) -> list[ListItem]:
         try:
             items = await self.client.get_shopping_list_items()
         except AppieAuthError as err:
-            raise ConfigEntryAuthFailed(f"Albert Heijn login expired: {err}") from err
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN, translation_key="auth_expired"
+            ) from err
         except AppieApiError as err:
-            raise UpdateFailed(f"Albert Heijn API unreachable: {err}") from err
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="api_error",
+                translation_placeholders={"error": str(err)},
+            ) from err
         self._last_fetch = monotonic()
         return items

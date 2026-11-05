@@ -1,55 +1,59 @@
 add_item:
-  name: Voeg item toe
-  description: >-
-    Voegt een item toe aan je Albert Heijn boodschappenlijst. Geef "Naam"
-    (standaard vrije tekst) óf "Product-ID" op. Een Product-ID wordt altijd
-    direct en correct gekoppeld — handig als je het exacte AH-webshopId al
-    weet (bijv. uit een productlink).
+  target:
+    entity:
+      integration: appie
+      domain: todo
   fields:
     name:
-      name: Naam
-      description: Wat je wilt toevoegen, bijv. "pindakaas". Laat leeg als je Product-ID gebruikt.
       example: "pindakaas"
       selector:
         text:
     product_id:
-      name: Product-ID
-      description: >-
-        Het exacte AH-webshopId van een product (bijv. 441199). Wordt
-        altijd direct gekoppeld, zonder te zoeken. Heeft voorrang op Naam.
       example: 441199
       selector:
         number:
           min: 1
+          max: 999999999
           mode: box
     quantity:
-      name: Aantal
-      description: Hoeveel stuks.
       default: 1
       selector:
         number:
           min: 1
-          max: 50
+          max: 99
           mode: box
-    free_text:
-      name: Alleen vrije tekst
-      description: >-
-        Aan (standaard): sla productzoeken over bij "Naam". Uit: probeer
-        eerst een product te koppelen via zoeken. Wordt genegeerd als
-        Product-ID is ingevuld.
-      default: true
+    link_product:
+      default: false
       selector:
         boolean:
 
+search_products:
+  target:
+    entity:
+      integration: appie
+      domain: todo
+  fields:
+    query:
+      required: true
+      example: "pindakaas"
+      selector:
+        text:
+    limit:
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 25
+          mode: box
+
 checkout:
-  name: Naar winkelwagen
-  description: >-
-    Zet alle niet-afgevinkte, product-gekoppelde items van je
-    boodschappenlijst om naar een bestelling/winkelwagen in de Albert
-    Heijn app. Items die als vrije tekst zijn toegevoegd worden hierbij
-    overgeslagen, omdat een bestelling een echte productkoppeling nodig
-    heeft.
+  target:
+    entity:
+      integration: appie
+      domain: todo
 
 clear_list:
-  name: Leeg boodschappenlijst
-  description: Verwijdert alle items van je Albert Heijn boodschappenlijst.
+  target:
+    entity:
+      integration: appie
+      domain: todo

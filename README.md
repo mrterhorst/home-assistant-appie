@@ -134,27 +134,86 @@ Via [HACS](https://hacs.xyz/): voeg deze repo toe als custom repository
 
 ## Wat je krijgt
 
-- Entiteit `todo.boodschappenlijst`, vraaggestuurd gesynchroniseerd (zie
-  "Wanneer wordt de lijst opgehaald?" hieronder):
-  - Item toevoegen in HA als tekst → toegevoegd als **vrije tekst** aan je
-    AH-lijst (standaardgedrag sinds v0.7 — zie [CHANGELOG.md](CHANGELOG.md)).
-  - Item toevoegen in HA als **kaal getal** (bijv. "441199") → herkend als
-    een echt AH product-ID en direct correct gekoppeld toegevoegd, zonder
-    te zoeken. De volledige lijst wordt daarna opnieuw opgehaald zodat je
-    ook meteen de juiste productnaam ziet.
-  - Item afvinken in HA → ook afgevinkt in de AH-app (zie "(inferred)"
-    hierboven).
-  - Item verwijderen in HA → verwijderd via `quantity: 0` (zie
-    "(inferred)" hierboven — niet 100% bevestigd gedrag).
-  - Wijzigingen die je rechtstreeks in de AH-app maakt, verschijnen bij de
-    volgende refresh ook in HA.
-- Verlopen AH-sessie → Home Assistant vraagt zelf om opnieuw in te loggen
-  (melding bij Instellingen), in plaats van stilletjes te stoppen.
-- Services: `appie.add_item` (met `product_id` voor een exact AH-
-  webshopId, of `free_text: false` voor een poging tot productkoppeling
-  via zoeken op naam), `appie.checkout` (zet product-gekoppelde items om
-  naar bestelling/winkelwagen — vrije-tekst-items worden daarbij
-  overgeslagen), `appie.clear_list`.
+Entiteit `todo.boodschappenlijst`, vraaggestuurd gesynchroniseerd (zie
+"Wanneer wordt de lijst opgehaald?"). Werkt met de gewone to-do-kaart, het
+to-do-paneel, `todo.*`-acties en spraakassistenten.
+
+### Typen in de lijst
+
+| Je typt | Wordt op je AH-lijst |
+|---|---|
+| `melk` | vrije tekst "melk" |
+| `2x melk`, `2 x melk`, `2× melk`, `melk x2` | vrije tekst "melk", aantal 2 |
+| `441199` (kaal getal) | AH-product 441199 (webshopId) |
+| `3x 441199` | AH-product 441199, aantal 3 |
+
+- **Vrije tekst is de standaard.** Wil je dat getypte tekst aan een
+  AH-product gekoppeld wordt, zet dan *Getypte items koppelen aan
+  AH-producten* aan in de opties. Alleen een zekere match wordt gekoppeld
+  (exacte titel, titel die ermee begint, of titel met alle woorden);
+  anders blijft het vrije tekst.
+- Items met een aantal boven 1 verschijnen als `2x melk`. Bewerk je die
+  tekst in HA (bijv. naar `3x melk` of `havermelk`), dan wordt het aantal
+  of de naam ook op je AH-lijst aangepast. Een gekoppeld product dat je
+  hernoemt naar tekst wordt vrije tekst.
+- Afvinken, uitvinken, verwijderen en "afgevinkte items wissen" werken
+  zoals je verwacht. Gekoppelde producten tonen `AH-product <id>` als
+  omschrijving.
+- Twee gelijknamige vrije-tekst-items krijgen in HA een uid met `#2`;
+  omdat AH vrije tekst op de tekst zelf herkent, raakt een wijziging aan
+  het ene item mogelijk ook het andere.
+
+### Acties (services)
+
+Alle acties hebben de lijst als doel (`target: entity_id:
+todo.boodschappenlijst`).
+
+| Actie | Wat het doet | Antwoord |
+|---|---|---|
+| `appie.add_item` | `name` en/of `product_id`, `quantity` (1–99), `link_product` (zoeken en koppelen) | wat er is toegevoegd |
+| `appie.search_products` | zoekt in het assortiment (`query`, `limit` ≤ 25) | product-ID, titel, merk, inhoud, prijs, bonus |
+| `appie.checkout` | zet niet-afgevinkte, gekoppelde items in je actieve AH-bestelling; aantallen die al in je mand zitten worden **opgehoogd**, niet overschreven | aantal producten, overgeslagen vrije-tekst-items |
+| `appie.clear_list` | haalt alles van de lijst | – |
+
+Voorbeeld: product-ID opzoeken en toevoegen.
+
+```yaml
+- action: appie.search_products
+  target:
+    entity_id: todo.boodschappenlijst
+  data:
+    query: vaatwastabletten
+  response_variable: zoek
+- action: appie.add_item
+  target:
+    entity_id: todo.boodschappenlijst
+  data:
+    product_id: "{{ zoek['todo.boodschappenlijst'].products[0].product_id }}"
+    quantity: 1
+```
+
+### Opties
+
+*Instellingen → Apparaten & diensten → Albert Heijn → Configureren*:
+achtergrond verversen (minuten, `0` = uit) en producten koppelen bij typen.
+
+### Beveiliging & privacy
+
+- Je AH-wachtwoord komt nooit in Home Assistant: je logt in op
+  `login.ah.nl` in je eigen browser en plakt alleen de eenmalige code. De
+  code wordt gecontroleerd op geldige tekens voordat hij verstuurd wordt.
+- Tokens staan in de config entry (zoals bij elke HA-integratie) en worden
+  **nooit gelogd**, ook niet op debug-niveau; hetzelfde geldt voor
+  bestelgegevens (die bevatten je adres).
+- **Diagnostics** (downloadbaar via de integratie) bevatten geen tokens,
+  geen account-ID en geen lijstinhoud, alleen aantallen.
+- Verlopen sessie → HA vraagt om opnieuw in te loggen (melding onder
+  Instellingen). Bij een 401 wordt eerst één keer ververst; gelijktijdige
+  verzoeken verversen nooit dubbel.
+- Verwijder je de integratie, dan wordt de sessie bij AH uitgelogd
+  (refresh-token ingetrokken).
+- De integratie praat uitsluitend met `api.ah.nl` (en jij met
+  `login.ah.nl`) en installeert geen extra Python-packages.
 
 ## Voorbeeldautomations
 
@@ -172,11 +231,10 @@ pas de entity_id's en het product-ID aan naar jouw situatie.
    (een kaal getal als item-tekst wordt door deze integratie herkend als
    product-ID, zie "Wat je krijgt" hierboven).
 
-   *Zoek zelf het webshopId van jouw vaatwasblokjes op*: roep eenmalig de
-   service `appie.add_item` aan met de naam van het product en
-   `free_text: false`, kijk daarna naar het toegevoegde item in
-   `todo.boodschappenlijst` (uid begint met `product:`) — of zoek het
-   product op ah.nl en haal het nummer uit de URL.
+   *Zoek zelf het webshopId van jouw vaatwasblokjes op*: roep in
+   Ontwikkelaarshulpmiddelen → Acties eenmalig `appie.search_products` aan
+   (bijv. `query: vaatwastabletten`) en neem het `product_id` over — of
+   zoek het product op ah.nl en haal het nummer uit de URL.
 
 2. **[`vaatwasblokjes_voorraad_bijwerken.yaml`](examples/automations/vaatwasblokjes_voorraad_bijwerken.yaml)**
    — reageert op `todo.item_completed` (afvinken, zowel in HA als in de
@@ -194,7 +252,15 @@ pas de entity_id's en het product-ID aan naar jouw situatie.
 
 ## Wat is getest
 
-Zonder een echt AH-account kon dit niet end-to-end getest worden. Wel is
+**Fork (v0.3+):** `tests/` bevat een testsuite met
+[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component)
+die de integratie in een echte Home Assistant-testomgeving draait tegen
+een gemockte AH-API: login/reauth, token-refresh (ook gelijktijdig),
+vraaggestuurd verversen, typen met aantallen, hernoemen, afvinken,
+verwijderen, zoeken, `checkout` en diagnostics. Draaien:
+`pip install pytest-homeassistant-custom-component && pytest`.
+
+**Oorspronkelijk:** zonder een echt AH-account kon dit niet end-to-end getest worden. Wel is
 `api.py` losstaand gedraaid tegen een lokale mockserver die `api.ah.nl`
 nabootst — inclusief een mockserver die de v2-lijst als in-memory state
 bijhoudt, zodat toevoegen/afvinken/verwijderen/legen ook echt op elkaar
@@ -214,8 +280,9 @@ van deze code.
 
 - Dit gebruikt een niet-officiële, reverse-engineered API. AH kan endpoints
   of de loginflow op elk moment wijzigen.
-- `check_item` (afvinken) en `delete_items` (verwijderen) zijn
-  **(inferred)** — zie hierboven.
+- Afvinken werkt in de praktijk; verwijderen, aantal wijzigen en hernoemen
+  zijn **(inferred)** (upsert met `quantity`/`quantity: 0`) — zie hierboven.
+- De integratie doet zich voor als de Appie-iOS-app (zoals appie-go).
 - De inlogcode van AH is vermoedelijk kortlevend; als het inwisselen
   mislukt met "cannot_connect", rond de loginstappen dan opnieuw af en
   plak een verse code.

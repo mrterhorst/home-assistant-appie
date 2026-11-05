@@ -20,14 +20,19 @@ from typing import Any
 from urllib.parse import unquote
 
 import voluptuous as vol
-
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from homeassistant.core import callback
-
 from .api import CLIENT_ID, AppieApiError, AppieClient
-from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN, MAX_SCAN_INTERVAL
+from .const import (
+    CONF_LINK_PRODUCTS,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_LINK_PRODUCTS,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    MAX_SCAN_INTERVAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +43,9 @@ LOGIN_URL = (
 
 CONF_CALLBACK = "callback"
 
-_CODE_RE = re.compile(r"(?:^|[?&])code=([^&\s]+)")
+_CODE_RE = re.compile(r"(?:^|[?&])code=([^&\s#]+)")
+# OAuth codes are URL-/base64-safe tokens; reject anything else before sending it on.
+_CODE_CHARS = re.compile(r"^[A-Za-z0-9._~+/=\-]{8,4096}$")
 
 
 def _extract_code(raw: str) -> str | None:
@@ -52,10 +59,12 @@ def _extract_code(raw: str) -> str | None:
         return None
     match = _CODE_RE.search(raw)
     if match:
-        return unquote(match.group(1))
-    if raw.startswith(("http", "appie")):
+        code = unquote(match.group(1))
+    elif raw.startswith(("http", "appie")):
         return None  # looks like a URL but we couldn't find a code= param
-    return raw
+    else:
+        code = raw
+    return code if _CODE_CHARS.match(code) else None
 
 
 class AppieConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -137,21 +146,26 @@ class AppieConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class AppieOptionsFlow(config_entries.OptionsFlow):
-    """Options: background polling interval."""
+    """Options: background refresh and product linking."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(data=user_input)
-        current = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        options = self.config_entry.options
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
-                        vol.Coerce(int), vol.Range(min=0, max=MAX_SCAN_INTERVAL)
-                    )
+                    vol.Required(
+                        CONF_SCAN_INTERVAL,
+                        default=options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_SCAN_INTERVAL)),
+                    vol.Required(
+                        CONF_LINK_PRODUCTS,
+                        default=options.get(CONF_LINK_PRODUCTS, DEFAULT_LINK_PRODUCTS),
+                    ): bool,
                 }
             ),
         )

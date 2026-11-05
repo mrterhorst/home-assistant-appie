@@ -1,5 +1,28 @@
 # Changelog
 
+- **v0.4.0 (fork mrterhorst)** — refactor: veiligheid, gebruiksgemak, vrije tekst
+  - **Aantallen typen**: `2x melk`, `melk x2`, `3x 441199`; items met
+    aantal > 1 tonen als `2x melk` en bewerken past aantal/naam aan op AH.
+  - **Hernoemen** vanuit HA werkt (oud item eruit, nieuw erin, in één
+    PATCH); aantal wijzigen is één upsert.
+  - **Optie "koppelen aan producten"** voor getypte tekst (standaard uit =
+    vrije tekst); alleen zekere matches, anders vrije tekst.
+  - **Nieuwe actie `appie.search_products`** (antwoord met product-ID,
+    prijs, inhoud, bonus). Alle acties hebben nu de lijst als `target` en
+    `add_item`/`checkout` geven een antwoord terug. `free_text` is
+    vervangen door `link_product`.
+  - **`checkout` overschreef je winkelmand**: AH's order-PUT *zet* het
+    aantal. Nu wordt eerst de actieve bestelling gelezen en opgehoogd.
+  - **Beveiliging**: refresh-lock (geen dubbele refresh bij gelijktijdige
+    verzoeken → geen onterechte herlogin), schrijf-lock (geen races bij
+    read-modify-write), logout bij verwijderen, bestel-/auth-bodies nooit
+    in log of foutmelding, inlogcode gevalideerd, invoer opgeschoond
+    (stuurtekens, lengte ≤ 200, aantal 1–99), onbekende AH-items loggen
+    alleen veldnamen.
+  - **Diagnostics** zonder tokens/account-ID/lijstinhoud.
+  - Vertaalde foutmeldingen (NL/EN); producttitels gecachet (minder
+    AH-calls); `runtime_data`; minimale HA-versie 2025.1.
+
 - **v0.3.0 (fork mrterhorst)**
   - **Vraaggestuurd ophalen** in plaats van elke 60 s pollen: bij openen
     van de lijst (max. 1× per 30 s), elke minuut zolang hij open staat, na
