@@ -41,13 +41,22 @@ USER_AGENT = "Appie/9.28 (iPhone17,3; iPhone; CPU OS 26_1 like Mac OS X)"
 class AppieApiError(Exception):
     """Raised for any AH API error (HTTP or GraphQL)."""
 
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+
 
 class AppieNotFoundError(AppieApiError):
     """Raised for HTTP 404 specifically."""
 
 
 class AppieAuthError(AppieApiError):
-    """Raised when we have no valid/refreshable session."""
+    """Raised when we have no valid/refreshable session (re-login needed)."""
+
+
+# Paths whose request/response bodies contain secrets (auth codes, access
+# and refresh tokens). These are never written to the log.
+_SENSITIVE_PATH_PREFIX = "/mobile-auth/"
 
 
 class AppieClient:
@@ -113,19 +122,41 @@ class AppieClient:
     async def _refresh_access_token(self) -> None:
         if not self.refresh_token:
             raise AppieAuthError("no refresh token available")
-        data = await self._raw_request(
-            "POST",
-            "/mobile-auth/v1/auth/token/refresh",
-            {"clientId": CLIENT_ID, "refreshToken": self.refresh_token},
-            auth=False,
-        )
+        try:
+            data = await self._raw_request(
+                "POST",
+                "/mobile-auth/v1/auth/token/refresh",
+                {"clientId": CLIENT_ID, "refreshToken": self.refresh_token},
+                auth=False,
+            )
+        except AppieApiError as err:
+            if err.status in (400, 401, 403):
+                # AH rejected the refresh token itself: only a new login helps.
+                raise AppieAuthError(f"refresh token rejected: {err}", err.status) from err
+            raise
+        if not data.get("access_token"):
+            raise AppieAuthError("token refresh returned no access token")
         await self._store_tokens(data)
 
     async def _ensure_fresh_token(self) -> None:
-        if self.expires_at and datetime.now(timezone.utc) > self.expires_at and self.refresh_token:
+        if not self.access_token:
+            if not self.refresh_token:
+                raise AppieAuthError("not logged in")
+            await self._refresh_access_token()
+            return
+        # Refresh a minute early so a request never races the expiry.
+        if (
+            self.expires_at
+            and self.refresh_token
+            and datetime.now(timezone.utc) > self.expires_at - timedelta(seconds=60)
+        ):
             try:
                 await self._refresh_access_token()
+            except AppieAuthError:
+                raise
             except AppieApiError:
+                # Transient (network/5xx): try the request with the old token;
+                # a 401 there triggers one more refresh attempt.
                 _LOGGER.warning("Token refresh failed; continuing with existing token")
 
     # -- low-level HTTP ----------------------------------------------------
@@ -153,8 +184,13 @@ class AppieClient:
                     body: Any = json_lib.loads(text) if text.strip() else {}
                 except ValueError:
                     body = {}
+                sensitive = path.startswith(_SENSITIVE_PATH_PREFIX)
                 _LOGGER.debug(
-                    "AH API %s %s -> HTTP %s: %s", method, path, resp.status, text[:4000]
+                    "AH API %s %s -> HTTP %s: %s",
+                    method,
+                    path,
+                    resp.status,
+                    "<redacted>" if sensitive else text[:4000],
                 )
                 if resp.status >= 400:
                     message = None
@@ -163,17 +199,31 @@ class AppieClient:
                     if not message:
                         # Include the raw body so unexpected error shapes are
                         # still debuggable from the Home Assistant log.
-                        snippet = text.strip()[:300]
+                        snippet = "" if sensitive else text.strip()[:300]
                         message = f"HTTP {resp.status}" + (f" — body: {snippet}" if snippet else "")
-                    exc_cls = AppieNotFoundError if resp.status == 404 else AppieApiError
-                    raise exc_cls(f"{method} {path} failed: {message}")
+                    if resp.status == 404:
+                        exc_cls = AppieNotFoundError
+                    elif resp.status == 401 and auth:
+                        exc_cls = AppieAuthError
+                    else:
+                        exc_cls = AppieApiError
+                    raise exc_cls(f"{method} {path} failed: {message}", resp.status)
                 return body or {}
         except aiohttp.ClientError as err:
             raise AppieApiError(f"{method} {path} failed: {err}") from err
 
     async def _request(self, method: str, path: str, json: dict[str, Any] | None = None) -> dict[str, Any]:
         await self._ensure_fresh_token()
-        return await self._raw_request(method, path, json)
+        try:
+            return await self._raw_request(method, path, json)
+        except AppieAuthError:
+            # Access token rejected (expired early / revoked): refresh once and
+            # retry. If the refresh itself is rejected, AppieAuthError
+            # propagates and Home Assistant asks for a new login.
+            if not self.refresh_token:
+                raise
+            await self._refresh_access_token()
+            return await self._raw_request(method, path, json)
 
     async def _graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         result = await self._request("POST", "/graphql", {"query": query, "variables": variables})
@@ -237,21 +287,13 @@ class AppieClient:
         The v2 API has no per-item UUID (only a `listItemId` that looks
         like an internal/possibly-always-0 placeholder in samples seen),
         so we synthesize one: `product:<id>` for product-linked items,
-        or `text:<description>` for free-text ones. This is what
-        check_item/delete_items below parse back.
+        or `text:<description>` for free-text ones (made unique in
+        get_shopping_list_items). Automations may match on these uids.
         """
         product_id = self._extract_product_id(raw_item)
         if product_id:
             return f"product:{product_id}"
         return f"text:{self._extract_name(raw_item)}"
-
-    @staticmethod
-    def _parse_item_id(item_id: str) -> tuple[int | None, str | None]:
-        if item_id.startswith("product:"):
-            return int(item_id.removeprefix("product:")), None
-        if item_id.startswith("text:"):
-            return None, item_id.removeprefix("text:")
-        raise AppieApiError(f"unrecognized item id: {item_id!r}")
 
     async def get_product_title(self, product_id: int) -> str | None:
         """(verified) GET /mobile-services/product/detail/v4/fir/{id}.
@@ -272,6 +314,7 @@ class AppieClient:
         data = await self._request("GET", "/mobile-services/shoppinglist/v2/items")
         raw_items = data.get("items") or []
         parsed = []
+        seen_ids: dict[str, int] = {}
         for item in raw_items:
             product_id = self._extract_product_id(item)
             name = self._extract_name(item)
@@ -284,8 +327,16 @@ class AppieClient:
                 # itself didn't carry a usable one) — resolve it directly
                 # instead of showing a bare "Product #<id>".
                 name = await self.get_product_title(product_id) or ""
+            item_id = self._item_id(item)
+            # Home Assistant needs unique uids per list. Two free-text items
+            # with the same text (or two rows for one product) would collide,
+            # so later duplicates get a "#n" suffix. check_item/delete_items
+            # resolve uids against a fresh read, never by parsing them.
+            seen_ids[item_id] = seen_ids.get(item_id, 0) + 1
+            if seen_ids[item_id] > 1:
+                item_id = f"{item_id}#{seen_ids[item_id]}"
             entry = {
-                "id": self._item_id(item),
+                "id": item_id,
                 "product_id": product_id,
                 "quantity": max(item.get("quantity") or 1, 1),
                 "checked": checked,
@@ -396,7 +447,6 @@ class AppieClient:
         item through the same add-item PATCH with `strikeThrough` set,
         preserving its current quantity/name from a fresh read.
         """
-        product_id, name = self._parse_item_id(item_id)
         items = await self.get_shopping_list_items()
         current = next((i for i in items if i["id"] == item_id), None)
         if current is None:
@@ -404,8 +454,8 @@ class AppieClient:
         await self._add_to_shopping_list(
             [
                 {
-                    "product_id": product_id,
-                    "name": name if name is not None else current["name"],
+                    "product_id": current["product_id"] or None,
+                    "name": current["name"],
                     "quantity": current["quantity"],
                     "checked": checked,
                 }

@@ -1,5 +1,24 @@
 # Changelog
 
+- **v0.3.0 (fork mrterhorst)**
+  - **Vraaggestuurd ophalen** in plaats van elke 60 s pollen: bij openen
+    van de lijst (max. 1× per 30 s), elke minuut zolang hij open staat, na
+    eigen wijzigingen, plus een instelbaar achtergrondinterval (standaard
+    60 min, `0` = uit) via de opties.
+  - **Herlogin (reauth)**: een 401 leidt eerst tot één token-refresh en
+    een nieuwe poging; weigert AH de refresh-token, dan vraagt HA om
+    opnieuw in te loggen. Tokens worden ruim vóór het verlopen ververst.
+    Token-updates herladen de integratie niet meer.
+  - **Geen secrets in de log**: request/response van `/mobile-auth/`
+    (code, access- en refresh-token) wordt nooit gelogd.
+  - **Unieke uids**: gelijknamige vrije-tekst-items krijgen `#2`, `#3`;
+    afvinken/verwijderen zoekt het item op via een verse lijst in plaats
+    van de uid te parsen.
+  - Fouten verschijnen als nette `HomeAssistantError`; `iot_class` is nu
+    `cloud_polling`; account-ID als unique_id (geen dubbele entries).
+  - Tests (`tests/`, pytest-homeassistant-custom-component) met
+    gemockte AH-API.
+
 - **Voorbeeldautomations toegevoegd** — `examples/automations/` bevat nu
   een uitgewerkt vaatwasblokjes-scenario: automatisch aftellen bij het
   starten van de vaatwasser, toevoegen aan de lijst via product-ID zodra

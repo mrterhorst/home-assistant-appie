@@ -7,6 +7,13 @@
         "data": {
           "callback": "appie://login-exit?code=... (or just the code)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Log in to Albert Heijn again",
+        "description": "Your Albert Heijn session has expired. Repeat the login steps:\n\n1. Open this link in your browser, but **don't log in yet**:\n\n{login_url}\n\n2. Open Developer Tools first: **F12**, or right-click → **Inspect**. Click the **Network** tab and turn on \"Preserve log\" (checkbox top-left of that tab).\n3. Now log in with your AH account.\n4. After logging in, the page tries to redirect to an address starting with `appie://login-exit?code=...`. Your browser can't open that — that's expected. A row for it appears in the Network tab, usually red or marked \"(failed)\", starting with `login-exit`.\n5. Right-click that row → **Copy** → **Copy URL**.\n6. Paste that URL (or just the part after `code=`) below.",
+        "data": {
+          "callback": "appie://login-exit?code=... (or just the code)"
+        }
       }
     },
     "error": {
@@ -14,7 +21,9 @@
       "cannot_connect": "Could not exchange the login code for an Albert Heijn session. The code may have expired — redo the login steps and paste a fresh code."
     },
     "abort": {
-      "already_configured": "Albert Heijn is already configured."
+      "already_configured": "Albert Heijn is already configured.",
+      "reauth_successful": "Logged in again; the shopping list works again.",
+      "wrong_account": "You logged in with a different AH account than before. Log in with the original account, or remove and re-add the integration."
     }
   },
   "services": {
@@ -29,6 +38,17 @@
     "clear_list": {
       "name": "Clear shopping list",
       "description": "Removes all items from your Albert Heijn shopping list."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Refresh settings",
+        "description": "The list is always fetched when you open it in Home Assistant, every minute while it stays open, and right after changes made from Home Assistant. This setting controls the extra background refresh, so automations and voice assistants see a fresh list. 0 = off.",
+        "data": {
+          "scan_interval": "Background refresh (minutes, 0 = off)"
+        }
+      }
     }
   }
 }

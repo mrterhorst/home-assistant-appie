@@ -7,6 +7,13 @@
         "data": {
           "callback": "appie://login-exit?code=... (of alleen de code)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Opnieuw inloggen bij Albert Heijn",
+        "description": "Je Albert Heijn-sessie is verlopen. Doorloop de inlogstappen opnieuw:\n\n1. Open deze link in je browser, maar log **nog niet** in:\n\n{login_url}\n\n2. Open eerst de DevTools: **F12**, of rechtermuisknop → **Inspecteren**. Klik op tabblad **Network** en zet \"Preserve log\" aan (vinkje linksboven in dat tabblad).\n3. Log nu pas in met je AH-account.\n4. Na het inloggen probeert de pagina te verwijzen naar een adres dat begint met `appie://login-exit?code=...`. Je browser kan dat niet openen — dat is normaal. In de Network-tab verschijnt hiervoor een regel, meestal rood of met status \"(failed)\", die begint met `login-exit`.\n5. Rechtermuisknop op die regel → **Copy** → **Copy URL** (Firefox: **Kopieer linklocatie**).\n6. Plak die URL (of alleen de code na `code=`) hieronder.",
+        "data": {
+          "callback": "appie://login-exit?code=... (of alleen de code)"
+        }
       }
     },
     "error": {
@@ -14,7 +21,9 @@
       "cannot_connect": "Kon de inlogcode niet inwisselen voor een sessie bij Albert Heijn. De code is mogelijk verlopen — rond de loginstappen opnieuw af en plak een nieuwe code."
     },
     "abort": {
-      "already_configured": "Albert Heijn is al geconfigureerd."
+      "already_configured": "Albert Heijn is al geconfigureerd.",
+      "reauth_successful": "Opnieuw ingelogd; de boodschappenlijst werkt weer.",
+      "wrong_account": "Je bent ingelogd met een ander AH-account dan eerst. Log in met het oorspronkelijke account, of verwijder de integratie en voeg hem opnieuw toe."
     }
   },
   "services": {
@@ -29,6 +38,17 @@
     "clear_list": {
       "name": "Leeg boodschappenlijst",
       "description": "Verwijdert alle items van je Albert Heijn boodschappenlijst."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Verversen",
+        "description": "De lijst wordt altijd opgehaald zodra je hem in Home Assistant opent, elke minuut zolang hij open staat, en direct na wijzigingen vanuit Home Assistant. Deze instelling bepaalt het extra verversen op de achtergrond, zodat automations en spraakassistenten een verse lijst zien. 0 = uit.",
+        "data": {
+          "scan_interval": "Achtergrond verversen (minuten, 0 = uit)"
+        }
+      }
     }
   }
 }

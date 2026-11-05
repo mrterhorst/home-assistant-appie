@@ -41,7 +41,7 @@ Gebruik op eigen risico.
 custom_components/appie/
   api.py          Async AH-API-client
   config_flow.py  Config flow: plak de code uit de AH-inlogpagina hier
-  coordinator.py  Polling (elke 60s) voor tweerichtings-sync
+  coordinator.py  Vraaggestuurd ophalen + optioneel achtergrondinterval
   todo.py         To-do-lijst-entiteit "Boodschappenlijst"
   __init__.py     Setup + services (add_item, checkout, clear_list)
 ```
@@ -134,7 +134,8 @@ Via [HACS](https://hacs.xyz/): voeg deze repo toe als custom repository
 
 ## Wat je krijgt
 
-- Entiteit `todo.boodschappenlijst`, elke 60s gesynchroniseerd:
+- Entiteit `todo.boodschappenlijst`, vraaggestuurd gesynchroniseerd (zie
+  "Wanneer wordt de lijst opgehaald?" hieronder):
   - Item toevoegen in HA als tekst → toegevoegd als **vrije tekst** aan je
     AH-lijst (standaardgedrag sinds v0.7 — zie [CHANGELOG.md](CHANGELOG.md)).
   - Item toevoegen in HA als **kaal getal** (bijv. "441199") → herkend als
@@ -147,6 +148,8 @@ Via [HACS](https://hacs.xyz/): voeg deze repo toe als custom repository
     "(inferred)" hierboven — niet 100% bevestigd gedrag).
   - Wijzigingen die je rechtstreeks in de AH-app maakt, verschijnen bij de
     volgende refresh ook in HA.
+- Verlopen AH-sessie → Home Assistant vraagt zelf om opnieuw in te loggen
+  (melding bij Instellingen), in plaats van stilletjes te stoppen.
 - Services: `appie.add_item` (met `product_id` voor een exact AH-
   webshopId, of `free_text: false` voor een poging tot productkoppeling
   via zoeken op naam), `appie.checkout` (zet product-gekoppelde items om
@@ -176,8 +179,9 @@ pas de entity_id's en het product-ID aan naar jouw situatie.
    product op ah.nl en haal het nummer uit de URL.
 
 2. **[`vaatwasblokjes_voorraad_bijwerken.yaml`](examples/automations/vaatwasblokjes_voorraad_bijwerken.yaml)**
-   — reageert op `todo.item_completed` (afvinken, zowel in HA als —met
-   tot ~60s vertraging door de poll-interval— in de AH-app zelf) en telt
+   — reageert op `todo.item_completed` (afvinken, zowel in HA als in de
+   AH-app zelf; dat laatste pas bij de volgende refresh, zie "Wanneer wordt
+   de lijst opgehaald?") en telt
    de voorraad-teller weer op met de pakgrootte, zodra het afgevinkte item
    matcht op `product:<jouw-webshopId>`.
 
@@ -219,6 +223,23 @@ van deze code.
 Zie [CHANGELOG.md](CHANGELOG.md) voor de volledige geschiedenis van
 gevonden bugs en fixes.
 
+## Wanneer wordt de lijst opgehaald?
+
+Niet meer elke 60 seconden, maar op het moment dat het nodig is:
+
+- **Bij openen**: zodra een to-do-kaart of het to-do-paneel de lijst toont
+  (web of app), wordt hij opgehaald — tenzij de laatste ophaalactie minder
+  dan 30 seconden oud is.
+- **Zolang hij open staat**: elke minuut, zodat afvinken in de AH-app
+  (bijv. in de winkel) zichtbaar wordt. Sluit je de kaart, dan stopt dit.
+- **Na een wijziging vanuit HA** (toevoegen, afvinken, verwijderen,
+  services).
+- **Achtergrond**: instelbaar via *Instellingen → Apparaten & diensten →
+  Albert Heijn → Configureren* (minuten, standaard 60, `0` = uit). Dit is
+  wat automations en spraakassistenten (`todo.get_items`) zien als niemand
+  de lijst open heeft. Wil je dat een automation snel reageert op afvinken
+  in de AH-app, zet dit dan lager (bijv. 5).
+
 ## Debug-logging aanzetten
 
 Standaard logt Home Assistant van een custom integration alleen fouten die
@@ -242,6 +263,9 @@ Elke regel ziet er dan zo uit:
 ```
 DEBUG (MainThread) [custom_components.appie.api] AH API GET /mobile-services/shoppinglist/v2/items -> HTTP 200: {...}
 ```
+
+Inlogcodes en tokens (alles onder `/mobile-auth/`) worden nooit gelogd,
+ook niet op debug-niveau.
 
 Een item zonder bruikbare naam/productID wordt daarnaast altijd — ook
 zónder debug-logging — als **waarschuwing** gelogd met de ruwe AH-data.

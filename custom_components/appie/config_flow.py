@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import unquote
 
 import voluptuous as vol
@@ -22,8 +24,10 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from homeassistant.core import callback
+
 from .api import CLIENT_ID, AppieApiError, AppieClient
-from .const import DOMAIN
+from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DOMAIN, MAX_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,31 +63,95 @@ class AppieConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict | None = None
-    ) -> config_entries.FlowResult:
-        errors: dict[str, str] = {}
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        return AppieOptionsFlow()
 
-        if user_input is not None:
-            code = _extract_code(user_input[CONF_CALLBACK])
-            if not code:
-                errors["base"] = "invalid_code"
-            else:
-                session = async_get_clientsession(self.hass)
-                client = AppieClient(session)
-                try:
-                    tokens = await client.exchange_code(code)
-                except AppieApiError:
-                    _LOGGER.exception("Failed to exchange AH login code for tokens")
-                    errors["base"] = "cannot_connect"
-                else:
-                    return self.async_create_entry(
-                        title="Albert Heijn boodschappenlijst", data=tokens
-                    )
+    async def _async_login(
+        self, user_input: dict[str, Any], errors: dict[str, str]
+    ) -> dict[str, Any] | None:
+        """Exchange the pasted code for tokens; fill errors on failure."""
+        code = _extract_code(user_input[CONF_CALLBACK])
+        if not code:
+            errors["base"] = "invalid_code"
+            return None
+        client = AppieClient(async_get_clientsession(self.hass))
+        try:
+            return await client.exchange_code(code)
+        except AppieApiError as err:
+            # Never log the code or the response: both are secrets.
+            _LOGGER.error("Failed to exchange AH login code for tokens: HTTP %s", err.status)
+            errors["base"] = "cannot_connect"
+            return None
 
+    def _form(self, step_id: str, errors: dict[str, str]) -> config_entries.ConfigFlowResult:
         return self.async_show_form(
-            step_id="user",
+            step_id=step_id,
             data_schema=vol.Schema({vol.Required(CONF_CALLBACK): str}),
             description_placeholders={"login_url": LOGIN_URL},
             errors=errors,
+        )
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            tokens = await self._async_login(user_input, errors)
+            if tokens is not None:
+                if tokens.get("member_id"):
+                    await self.async_set_unique_id(str(tokens["member_id"]))
+                    self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title="Albert Heijn boodschappenlijst", data=tokens
+                )
+        return self._form("user", errors)
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> config_entries.ConfigFlowResult:
+        """Triggered when AH rejects the stored refresh token."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            tokens = await self._async_login(user_input, errors)
+            if tokens is not None:
+                entry = self._get_reauth_entry()
+                if (
+                    entry.unique_id
+                    and tokens.get("member_id")
+                    and str(tokens["member_id"]) != entry.unique_id
+                ):
+                    return self.async_abort(reason="wrong_account")
+                return self.async_update_reload_and_abort(
+                    entry, data={**entry.data, **tokens}
+                )
+        return self._form("reauth_confirm", errors)
+
+
+class AppieOptionsFlow(config_entries.OptionsFlow):
+    """Options: background polling interval."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+        current = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
+                        vol.Coerce(int), vol.Range(min=0, max=MAX_SCAN_INTERVAL)
+                    )
+                }
+            ),
         )

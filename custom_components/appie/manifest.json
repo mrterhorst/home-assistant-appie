@@ -3,9 +3,10 @@
   "name": "Albert Heijn boodschappenlijst",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/gwillem/appie-go",
+  "documentation": "https://github.com/mrterhorst/home-assistant-appie",
   "integration_type": "service",
-  "iot_class": "local_polling",
+  "iot_class": "cloud_polling",
   "requirements": [],
-  "version": "0.2.0"
+  "version": "0.3.0",
+  "issue_tracker": "https://github.com/mrterhorst/home-assistant-appie/issues"
 }
