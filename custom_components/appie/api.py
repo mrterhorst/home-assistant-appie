@@ -37,9 +37,17 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=20)
 TOKEN_REFRESH_MARGIN = timedelta(minutes=2)
 
 # Request and response bodies of these paths are never logged (not even at
-# debug level): auth carries codes and tokens, order data carries the
-# delivery address.
-_REDACTED_PATH_PREFIXES = ("/mobile-auth/", "/mobile-services/order/")
+# debug level): they carry login codes and tokens.
+_REDACTED_PATH_PREFIXES = ("/mobile-auth/",)
+
+# The only AH endpoints this integration may call: login/tokens, the
+# shopping list and product lookup/search. Everything else (orders, basket,
+# checkout, receipts, account) is refused before any request is made.
+_ALLOWED_PATH_PREFIXES = (
+    "/mobile-auth/",
+    "/mobile-services/shoppinglist/v2/",
+    "/mobile-services/product/",
+)
 
 LIST_PATH = "/mobile-services/shoppinglist/v2/items"
 
@@ -265,8 +273,15 @@ class AppieClient:
         }
         if auth and self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
-        redact = path.startswith(_REDACTED_PATH_PREFIXES)
         log_path = path.split("?", 1)[0]
+        if (
+            not log_path.startswith(_ALLOWED_PATH_PREFIXES)
+            or ".." in log_path
+            or "//" in log_path
+            or "%" in log_path
+        ):
+            raise AppieApiError(f"refusing to call non-allowlisted AH endpoint {log_path}")
+        redact = path.startswith(_REDACTED_PATH_PREFIXES)
 
         try:
             async with self._session.request(
@@ -418,8 +433,8 @@ class AppieClient:
     # (verified) PATCH shoppinglist/v2/items adds items. (inferred) AH treats
     # it as an upsert keyed on productId (product items) or description
     # (free text), so re-sending an item with another quantity/strikeThrough
-    # updates it, and quantity 0 removes it (the same convention AH's order
-    # API uses). Confirmed in practice for ticking off.
+    # updates it, and quantity 0 removes it (the convention AH uses elsewhere
+    # in its API). Confirmed in practice for ticking off.
 
     @staticmethod
     def _payload(
@@ -529,49 +544,3 @@ class AppieClient:
         items = await self.get_shopping_list_items()
         await self.delete_items([item.id for item in items])
         return len(items)
-
-    # -- order -----------------------------------------------------------------
-
-    async def shopping_list_to_order(self) -> dict[str, Any]:
-        """Add unchecked, product-linked list items to the active AH order.
-
-        (verified) PUT order/v1/items *sets* the quantity of each product in
-        the order, so the current order quantities are read first and the
-        list quantities are added to them; otherwise products already in the
-        basket would be overwritten.
-        """
-        items = await self.get_shopping_list_items()
-        wanted: dict[int, int] = {}
-        skipped = 0
-        for item in items:
-            if item.checked:
-                continue
-            if not item.product_id:
-                skipped += 1
-                continue
-            wanted[item.product_id] = wanted.get(item.product_id, 0) + item.quantity
-        if not wanted:
-            return {"added_products": 0, "skipped_free_text": skipped}
-
-        try:
-            order = await self._request("GET", "/mobile-services/order/v1/summaries/active?sortBy=DEFAULT")
-        except AppieNotFoundError as err:
-            raise AppieApiError("no active order (open a new order in the AH app first)", 404) from err
-        in_order: dict[int, int] = {}
-        for row in order.get("orderedProducts") or []:
-            pid = (row.get("product") or {}).get("webshopId")
-            if pid:
-                in_order[int(pid)] = int(row.get("quantity") or row.get("amount") or 0)
-
-        payload = [
-            {
-                "productId": pid,
-                "quantity": in_order.get(pid, 0) + qty,
-                "originCode": "PRD",
-                "description": "",
-                "strikethrough": False,
-            }
-            for pid, qty in wanted.items()
-        ]
-        await self._request("PUT", "/mobile-services/order/v1/items?sortBy=DEFAULT", {"items": payload})
-        return {"added_products": len(wanted), "skipped_free_text": skipped}

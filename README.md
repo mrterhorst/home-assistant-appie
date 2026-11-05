@@ -43,7 +43,8 @@ custom_components/appie/
   config_flow.py  Config flow: plak de code uit de AH-inlogpagina hier
   coordinator.py  Vraaggestuurd ophalen + optioneel achtergrondinterval
   todo.py         To-do-lijst-entiteit "Boodschappenlijst"
-  __init__.py     Setup + services (add_item, checkout, clear_list)
+  __init__.py     Setup
+  todo.py         To-do-entiteit + acties (add_item, search_products, clear_list)
 ```
 
 ## Hoe dit werkt
@@ -172,7 +173,6 @@ todo.boodschappenlijst`).
 |---|---|---|
 | `appie.add_item` | `name` en/of `product_id`, `quantity` (1–99), `link_product` (zoeken en koppelen) | wat er is toegevoegd |
 | `appie.search_products` | zoekt in het assortiment (`query`, `limit` ≤ 25) | product-ID, titel, merk, inhoud, prijs, bonus |
-| `appie.checkout` | zet niet-afgevinkte, gekoppelde items in je actieve AH-bestelling; aantallen die al in je mand zitten worden **opgehoogd**, niet overschreven | aantal producten, overgeslagen vrije-tekst-items |
 | `appie.clear_list` | haalt alles van de lijst | – |
 
 Voorbeeld: product-ID opzoeken en toevoegen.
@@ -202,9 +202,12 @@ achtergrond verversen (minuten, `0` = uit) en producten koppelen bij typen.
 - Je AH-wachtwoord komt nooit in Home Assistant: je logt in op
   `login.ah.nl` in je eigen browser en plakt alleen de eenmalige code. De
   code wordt gecontroleerd op geldige tekens voordat hij verstuurd wordt.
+- **Alleen de boodschappenlijst.** Er zit geen enkele koppeling naar
+  online bestellen in: de client weigert vooraf elk AH-endpoint buiten
+  inloggen, de boodschappenlijst en product zoeken/opzoeken (dus geen
+  bestelling, winkelmand, kassabonnen of accountgegevens).
 - Tokens staan in de config entry (zoals bij elke HA-integratie) en worden
-  **nooit gelogd**, ook niet op debug-niveau; hetzelfde geldt voor
-  bestelgegevens (die bevatten je adres).
+  **nooit gelogd**, ook niet op debug-niveau.
 - **Diagnostics** (downloadbaar via de integratie) bevatten geen tokens,
   geen account-ID en geen lijstinhoud, alleen aantallen.
 - Verlopen sessie → HA vraagt om opnieuw in te loggen (melding onder
@@ -257,7 +260,7 @@ pas de entity_id's en het product-ID aan naar jouw situatie.
 die de integratie in een echte Home Assistant-testomgeving draait tegen
 een gemockte AH-API: login/reauth, token-refresh (ook gelijktijdig),
 vraaggestuurd verversen, typen met aantallen, hernoemen, afvinken,
-verwijderen, zoeken, `checkout` en diagnostics. Draaien:
+verwijderen, zoeken, de endpoint-allowlist en diagnostics. Draaien:
 `pip install pytest-homeassistant-custom-component && pytest`.
 
 **Oorspronkelijk:** zonder een echt AH-account kon dit niet end-to-end getest worden. Wel is

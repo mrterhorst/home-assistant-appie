@@ -36,7 +36,6 @@ MAX_SEARCH_RESULTS = 25
 
 SERVICE_ADD_ITEM = "add_item"
 SERVICE_SEARCH_PRODUCTS = "search_products"
-SERVICE_CHECKOUT = "checkout"
 SERVICE_CLEAR_LIST = "clear_list"
 
 ATTR_NAME = "name"

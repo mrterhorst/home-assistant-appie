@@ -9,13 +9,17 @@
     vrije tekst); alleen zekere matches, anders vrije tekst.
   - **Nieuwe actie `appie.search_products`** (antwoord met product-ID,
     prijs, inhoud, bonus). Alle acties hebben nu de lijst als `target` en
-    `add_item`/`checkout` geven een antwoord terug. `free_text` is
-    vervangen door `link_product`.
-  - **`checkout` overschreef je winkelmand**: AH's order-PUT *zet* het
-    aantal. Nu wordt eerst de actieve bestelling gelezen en opgehoogd.
+    `add_item` geeft een antwoord terug. `free_text` is vervangen door
+    `link_product`.
+  - **Geen online bestellen meer**: `appie.checkout` is verwijderd. De
+    client heeft een allowlist en weigert vooraf elk endpoint buiten
+    inloggen, de boodschappenlijst en product zoeken (geen bestelling,
+    winkelmand, kassabonnen of account). (Daarbij bleek de oude `checkout`
+    bovendien je winkelmand te overschrijven: AH's order-PUT *zet* het
+    aantal.)
   - **Beveiliging**: refresh-lock (geen dubbele refresh bij gelijktijdige
     verzoeken → geen onterechte herlogin), schrijf-lock (geen races bij
-    read-modify-write), logout bij verwijderen, bestel-/auth-bodies nooit
+    read-modify-write), logout bij verwijderen, auth-bodies nooit
     in log of foutmelding, inlogcode gevalideerd, invoer opgeschoond
     (stuurtekens, lengte ≤ 200, aantal 1–99), onbekende AH-items loggen
     alleen veldnamen.

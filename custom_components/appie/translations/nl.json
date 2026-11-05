@@ -63,10 +63,6 @@
         }
       }
     },
-    "checkout": {
-      "name": "Naar winkelmand",
-      "description": "Zet niet-afgevinkte, aan een product gekoppelde items in je actieve AH-bestelling. Wat al in de mand zit blijft staan en wordt opgehoogd. Vrije-tekst-items worden overgeslagen."
-    },
     "clear_list": {
       "name": "Boodschappenlijst leegmaken",
       "description": "Verwijdert alle items van de Albert Heijn boodschappenlijst."

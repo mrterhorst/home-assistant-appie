@@ -33,8 +33,6 @@ TOKEN_URL = f"{API}/mobile-auth/v1/auth/token"
 REFRESH_URL = f"{API}/mobile-auth/v1/auth/token/refresh"
 LOGOUT_URL = f"{API}/mobile-auth/v1/auth/token/logout"
 SEARCH_URL = f"{API}/mobile-services/product/search/v2"
-ORDER_URL = f"{API}/mobile-services/order/v1/summaries/active"
-ORDER_ITEMS_URL = f"{API}/mobile-services/order/v1/items"
 ENTITY = "todo.boodschappenlijst"
 
 ITEMS = {
@@ -433,14 +431,23 @@ async def test_service_search_products(hass, aioclient_mock, clock):
     }
 
 
-async def test_checkout_adds_to_existing_basket(hass, aioclient_mock, clock):
-    aioclient_mock.get(LIST_URL, json=ITEMS)
-    aioclient_mock.get(ORDER_URL, json={"id": 1, "orderedProducts": [{"quantity": 3, "product": {"webshopId": 234096}}]})
-    aioclient_mock.put(ORDER_ITEMS_URL, json={})
-    await _setup(hass, _entry())
-    resp = await hass.services.async_call(
-        DOMAIN, "checkout", {"entity_id": ENTITY}, blocking=True, return_response=True
+async def test_no_order_endpoints(hass, aioclient_mock):
+    """Only list/product/auth endpoints may be called; never orders/basket."""
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+    from custom_components.appie.api import AppieApiError
+
+    client = AppieClient(
+        async_get_clientsession(hass), tokens={"access_token": "AT", "refresh_token": "RT", "expires_at": _future()}
     )
-    assert resp[ENTITY] == {"added_products": 2, "skipped_free_text": 1}
-    sent = {i["productId"]: i["quantity"] for i in _calls(aioclient_mock, ORDER_ITEMS_URL, "PUT")[0][2]["items"]}
-    assert sent == {234096: 5, 407171: 1}  # 3 in basket + 2 on the list
+    for path in (
+        "/mobile-services/order/v1/items?sortBy=DEFAULT",
+        "/mobile-services/order/v1/summaries/active",
+        "/mobile-services/v1/receipts",
+        "/mobile-services/shoppinglist/v2/../../order/v1/items",
+        "/mobile-services/product/%2e%2e/order/v1/items",
+    ):
+        with pytest.raises(AppieApiError, match="refusing"):
+            await client._request("PUT", path, {})
+    assert aioclient_mock.call_count == 0
+    assert not hass.services.has_service(DOMAIN, "checkout")

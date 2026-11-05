@@ -46,12 +46,6 @@ search_products:
           max: 25
           mode: box
 
-checkout:
-  target:
-    entity:
-      integration: appie
-      domain: todo
-
 clear_list:
   target:
     entity:

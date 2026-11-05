@@ -52,7 +52,6 @@ from .const import (
     OPEN_MAX_AGE,
     OPEN_REFRESH_INTERVAL,
     SERVICE_ADD_ITEM,
-    SERVICE_CHECKOUT,
     SERVICE_CLEAR_LIST,
     SERVICE_SEARCH_PRODUCTS,
 )
@@ -94,9 +93,6 @@ async def async_setup_entry(
         },
         "async_service_search_products",
         supports_response=SupportsResponse.ONLY,
-    )
-    platform.async_register_entity_service(
-        SERVICE_CHECKOUT, {}, "async_service_checkout", supports_response=SupportsResponse.OPTIONAL
     )
     platform.async_register_entity_service(SERVICE_CLEAR_LIST, {}, "async_service_clear_list")
 
@@ -314,12 +310,6 @@ class AppieTodoListEntity(CoordinatorEntity[AppieCoordinator], TodoListEntity):
         except AppieApiError as err:
             self._fail(err)
         return {"products": [product.as_dict() for product in products]}
-
-    async def async_service_checkout(self) -> ServiceResponse:
-        try:
-            return await self._client.shopping_list_to_order()
-        except AppieApiError as err:
-            self._fail(err)
 
     async def async_service_clear_list(self) -> None:
         await self._write(self._client.clear_list())
